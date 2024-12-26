@@ -97,30 +97,32 @@ class AuthController extends Controller
     {
         // Validate input
         $validator = Validator::make($request->all(), [
-            'phone' => 'required|string',
+
             'otp' => 'required|numeric',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['status' => false, 'message' => $validator->errors()], 400);
         }
+        $user = User::where('otp', $request->otp)->first();
 
-        // Find user by phone and check OTP validity
-        $user = User::where('phone', $request->phone)->first();
+        if ($user) {
+            $user->otp = null;
+            $user->phone_verified_at = now();
+            $user->status = 'active';
+            $user->save();
 
-        if (!$user || $user->otp !== $request->otp || $user->otp_expires_at < now()) {
-            return response()->json(['status' => false, 'message' => 'Invalid or expired OTP.'], 400);
+            $token = JWTAuth::fromUser($user);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'OTP verified successfully.',
+                // 'access_token' => $token,
+                // 'token_type' => 'bearer',
+                // 'email_verified_at' => $user->email_verified_at,
+            ], 200);
         }
 
-        // Mark user as active and update OTP
-        $user->status = 'active';
-        $user->otp = null;
-        $user->otp_expires_at = null;
-        $user->save();
-
-        return response()->json([
-            'status' => true,
-            'message' => 'Phone number verified successfully.',
-        ], 200);
+        return response()->json(['error' => 'Invalid OTP.'], 400);
     }
 }
